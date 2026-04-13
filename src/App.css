@@ -1,0 +1,84 @@
+/* App-specific styles */
+
+/* Ensure smooth scrolling behavior */
+html {
+  scroll-behavior: auto;
+}
+
+/* Hide scrollbar but keep functionality */
+body::-webkit-scrollbar {
+  width: 8px;
+}
+
+body::-webkit-scrollbar-track {
+  background: #F4EFE6;
+}
+
+body::-webkit-scrollbar-thumb {
+  background: #C8A14A40;
+  border-radius: 4px;
+}
+
+body::-webkit-scrollbar-thumb:hover {
+  background: #C8A14A60;
+}
+
+/* Selection color */
+::selection {
+  background: #C8A14A30;
+  color: #14181F;
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid #C8A14A;
+  outline-offset: 2px;
+}
+
+/* Button reset */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+/* Input reset */
+input {
+  font-family: inherit;
+}
+
+/* Image optimization */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent text selection on decorative elements */
+.sun-ring,
+.filigree-divider {
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .sun-ring {
+    animation-duration: 120s;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .sun-ring {
+    animation: none;
+  }
+}
