@@ -138,7 +138,7 @@ export const TwoPathsSection: React.FC<TwoPathsSectionProps> = ({ onSelectPath }
           </div>
           
           <p className="text-sm text-[#6D6A61] mb-6 leading-relaxed">
-            Your sun sign, BaZi day master, and elemental balance—unified into one coherent portrait.
+            Western signs, BaZi Day Master, and Wu Xing elemental balance — fused into one coherent portrait of who you are.
           </p>
           
           <button
@@ -172,7 +172,7 @@ export const TwoPathsSection: React.FC<TwoPathsSectionProps> = ({ onSelectPath }
           </div>
           
           <p className="text-sm text-[#6D6A61] mb-6 leading-relaxed">
-            Compare two charts. See resonance, tension, and shared timing between two souls.
+            Resonance, tension, and shared timing between two souls — through Western synastry, BaZi, and fusion astrology.
           </p>
           
           <button

@@ -107,8 +107,8 @@ export const RevealSection: React.FC<RevealSectionProps> = ({
           {/* Photo area */}
           <div className="h-[160px] md:h-[32%] overflow-hidden">
             <img
-              src="/reveal_portrait.jpg"
-              alt="Cosmic portrait"
+              src="/cosmic_portrait.png"
+              alt="Your cosmic portrait"
               className="w-full h-full object-cover"
             />
           </div>

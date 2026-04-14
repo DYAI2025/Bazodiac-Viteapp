@@ -125,33 +125,36 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onBegin }) => {
         <SunIcon size={undefined} className="w-[8vmin] h-[8vmin]" opacity={0.18} />
       </div>
 
-      {/* Micro Label */}
+      {/* Centered Brand Wordmark */}
       <div
         ref={labelRef}
-        className="absolute left-1/2 top-[30%] -translate-x-1/2"
+        className="absolute left-1/2 top-[28%] -translate-x-1/2 text-center"
       >
-        <span className="font-mono text-xs uppercase tracking-[0.18em] text-[#6D6A61]">
+        <h1 className="text-[clamp(48px,8vw,96px)] leading-none tracking-[-0.02em] text-[#C8A14A]" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+          Bazodiac
+        </h1>
+        <span className="font-mono text-xs uppercase tracking-[0.18em] text-[#6D6A61] mt-2 block">
           Western · BaZi · WuXing
         </span>
       </div>
 
       {/* Headline */}
-      <h1
+      <div
         ref={headlineRef}
         className="absolute left-1/2 top-[52%] -translate-x-1/2 -translate-y-1/2 text-center px-4"
       >
-        <span className="block text-[clamp(36px,6vw,76px)] leading-[0.95] tracking-[-0.01em] text-[#14181F]">
+        <span className="block text-[clamp(32px,5vw,64px)] leading-[0.95] tracking-[-0.01em] text-[#14181F]">
           <span className="word inline-block">Three</span>{' '}
           <span className="word inline-block">ancient</span>{' '}
           <span className="word inline-block">systems.</span>
         </span>
-        <span className="block text-[clamp(36px,6vw,76px)] leading-[0.95] tracking-[-0.01em] text-[#14181F] mt-2">
+        <span className="block text-[clamp(32px,5vw,64px)] leading-[0.95] tracking-[-0.01em] text-[#14181F] mt-2">
           <span className="word inline-block">One</span>{' '}
           <span className="word inline-block">portrait</span>{' '}
           <span className="word inline-block">of</span>{' '}
           <span className="word inline-block">you.</span>
         </span>
-      </h1>
+      </div>
 
       {/* Subheadline */}
       <p

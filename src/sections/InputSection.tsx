@@ -207,8 +207,8 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
         className="absolute left-0 top-0 w-full md:w-[46vw] h-[40vh] md:h-full"
       >
         <img
-          src="/input_portrait.jpg"
-          alt="Editorial portrait"
+          src={pathType === 'partnership' ? '/birth_moment_2.webp' : '/birth_moment_1.webp'}
+          alt={pathType === 'partnership' ? 'Two souls, one reading' : 'Your birth moment'}
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[#F4EFE6]/50 hidden md:block" />
