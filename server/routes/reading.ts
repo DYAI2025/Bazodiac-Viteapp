@@ -121,10 +121,7 @@ async function fuFetch<T>(path: string, body: unknown): Promise<T> {
     throw new HttpError(502, 'FUFIRE_ERROR', `FuFirE ${path} returned an error`);
   }
 
-  const data = await res.json() as T;
-  // Debug: log full response structure (remove once shapes confirmed)
-  console.log(`[fufire] ${path} response:`, JSON.stringify(data, null, 2).slice(0, 2000));
-  return data;
+  return await res.json() as T;
 }
 
 /**
@@ -169,7 +166,7 @@ const ELEMENT_MAP: Record<string, string> = {
  * bazi.pillars: { year/month/day/hour: { stamm, zweig, tier, element } }
  * wuxing: { wu_xing_vector: { Holz, Feuer, Erde, Metall, Wasser }, dominant_element }
  *
- * Nakshatra: NOT available in FuFirE — replaced with ascendant_sign.
+ * Nakshatra: NOT in FuFirE — field renamed to ascendant (uses ascendant_sign).
  */
 function toPersonTeaser(data: PersonReading): PersonTeaser {
   const { bootstrap, bazi, wuxing } = data;
@@ -178,14 +175,14 @@ function toPersonTeaser(data: PersonReading): PersonTeaser {
   const sun_sign =
     pick(bootstrap.profile, 'sun_sign') ?? 'Unknown';
 
-  // Chinese year animal: bazi.chinese.year.animal (verified)
+  // Chinese year animal: bazi.chinese.year.animal, fallback to pillars.year.tier (German)
   const chinese_year_animal =
     pick(bazi, 'chinese', 'year', 'animal') ??
-    bazi.pillars?.year?.animal ??    // fallback to pillars if chinese missing
+    bazi.pillars?.year?.tier ??
     'Unknown';
 
-  // Ascendant (replaces Nakshatra — FuFirE has no Vedic calculation)
-  const nakshatra =
+  // Ascendant (rising sign) from bootstrap profile
+  const ascendant =
     pick(bootstrap.profile, 'ascendant_sign') ?? 'Unknown';
 
   // Element summary: from wuxing endpoint (verified)
@@ -200,12 +197,10 @@ function toPersonTeaser(data: PersonReading): PersonTeaser {
   const pct = total > 0 ? Math.round((maxScore / total) * 100) : 0;
   const element_summary = `${engElement} dominant (${pct}%)`;
 
-  // Preview text: signature_blueprint.seed is the narrative string (verified)
-  const preview_text =
-    pick(bootstrap.signature_blueprint, 'seed') ??
-    'Your reading is ready — unlock to see the full analysis.';
+  // Preview text: no narrative field in bootstrap — seed is a hash (sig_v1_...), not text
+  const preview_text = 'Your reading is ready — unlock to see the full analysis.';
 
-  return { sun_sign, chinese_year_animal, nakshatra, element_summary, preview_text };
+  return { sun_sign, chinese_year_animal, ascendant, element_summary, preview_text };
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────

@@ -49,9 +49,9 @@ export interface TeaserReading {
 export interface PersonTeaser {
   sun_sign: string;            // e.g. "Scorpio"
   chinese_year_animal: string; // e.g. "Year of the Dragon"
-  nakshatra: string;           // e.g. "Rohini"
+  ascendant: string;           // e.g. "Scorpio" (rising sign from bootstrap)
   element_summary: string;     // e.g. "Fire dominant (64%)"
-  preview_text: string;        // one-paragraph teaser narrative from bootstrap
+  preview_text: string;        // teaser narrative
 }
 
 // ── Full Reading ──────────────────────────────────────────────────────────────
