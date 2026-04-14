@@ -122,8 +122,8 @@ async function fuFetch<T>(path: string, body: unknown): Promise<T> {
   }
 
   const data = await res.json() as T;
-  // Debug: log response keys for each endpoint (remove once shapes confirmed)
-  console.log(`[fufire] ${path} keys:`, Object.keys(data as Record<string, unknown>));
+  // Debug: log full response structure (remove once shapes confirmed)
+  console.log(`[fufire] ${path} response:`, JSON.stringify(data, null, 2).slice(0, 2000));
   return data;
 }
 
