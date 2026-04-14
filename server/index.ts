@@ -17,7 +17,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '16kb' }));
 
 // ── Health check (Railway health probe) ─────────────────────────────────────
 
@@ -47,9 +47,8 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// ── Error handlers (must come after all routes) ──────────────────────────────
+// ── Error handler (must come after all routes) ───────────────────────────────
 
-app.use(notFoundHandler);
 app.use(errorHandler);
 
 // ── Start ────────────────────────────────────────────────────────────────────

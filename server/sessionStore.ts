@@ -12,10 +12,12 @@
  */
 
 import { randomUUID } from 'crypto';
+import { HttpError } from './errorHandler.js';
 import type { SessionEntry } from './types.js';
 import type { BirthData } from '../src/types/reading.js';
 
 const SESSION_TTL_MS = 3_600_000; // 1 hour
+const MAX_SESSIONS = 10_000;
 
 const sessions = new Map<string, SessionEntry>();
 
@@ -41,6 +43,10 @@ export function createSession(
   partner_birth_data?: BirthData
 ): string {
   evictExpired();
+
+  if (sessions.size >= MAX_SESSIONS) {
+    throw new HttpError(503, 'SERVICE_UNAVAILABLE', 'Server is at capacity — please try again later');
+  }
 
   const reading_hash = randomUUID();
   const entry: SessionEntry = {

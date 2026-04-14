@@ -1,11 +1,14 @@
 /**
  * POST /api/reading
  *
- * Validates birth data, calls FuFirE /v1/experience/bootstrap, strips the
- * response to a teaser (≤30% of full reading), stores the session, and returns
- * { teaser, reading_hash }.
+ * Validates birth data, calls FuFirE endpoints in parallel, strips results
+ * to teaser (≤30% of full reading), stores session, returns { teaser, reading_hash }.
  *
- * For partnership mode, two sequential FuFirE calls are made and merged.
+ * FuFirE calls per person (parallel):
+ * 1. POST /experience/bootstrap → sun_sign, moon_sign, ascendant, signature_blueprint
+ * 2. POST /calculate/bazi       → four pillars, year animal, day_master
+ * 3. POST /calculate/wuxing     → element balance, dominant_element
+ *
  * DEC-fufire-bootstrap, DEC-teaser-server-strip, REQ-F-reading-generation, REQ-F-teaser-preview
  */
 
@@ -13,8 +16,14 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { config, requireVars } from '../config.js';
 import { createSession } from '../sessionStore.js';
 import { HttpError } from '../errorHandler.js';
-import type { ReadingRequest, TeaserReading, PersonTeaser } from '../../src/types/reading.js';
-import type { FufireBootstrapRequest, FufireBootstrapResponse } from '../types.js';
+import type { ReadingRequest, TeaserReading, PersonTeaser, BirthData } from '../../src/types/reading.js';
+import type {
+  FufireBootstrapRequest,
+  FufireBootstrapResponse,
+  FufireCalculateRequest,
+  FufireBaziResponse,
+  FufireWuxingResponse,
+} from '../types.js';
 
 export const readingRouter = Router();
 
@@ -46,18 +55,27 @@ function validateBirthData(data: unknown, fieldPath: string): void {
   }
 }
 
-// ── FuFirE API call ───────────────────────────────────────────────────────────
+// ── Request builders ──────────────────────────────────────────────────────────
 
 /**
- * Builds the FuFirE BootstrapRequest from our internal BirthData.
- *
- * Mapping notes (verified against openapi.json BirthInput schema 2026-04-14):
- * - All birth fields are REQUIRED by FuFirE (date, time, tz, lat, lon)
- * - time format is HH:MM:SS — default to "12:00:00" when birth time is unknown
- * - lat/lon default to 0.0 when user has not provided location
+ * Flat format for /calculate/bazi, /calculate/wuxing, /calculate/fusion.
+ * Fields: date, time ("HH:MM"), lat, lon, timezone.
  */
-function toBirthDataRequest(bd: ReadingRequest['birth_data'], locale?: string): FufireBootstrapRequest {
-  // Convert "HH:MM" to "HH:MM:SS", or default to noon
+function toCalculateRequest(bd: BirthData): FufireCalculateRequest {
+  return {
+    date: bd.date,
+    time: bd.birth_time_known && bd.time ? bd.time : '12:00',
+    lat: bd.lat ?? 0.0,
+    lon: bd.lon ?? 0.0,
+    timezone: bd.timezone,
+  };
+}
+
+/**
+ * Nested format for /experience/bootstrap.
+ * Fields in birth object; time "HH:MM:SS"; tz (not timezone).
+ */
+function toBootstrapRequest(bd: BirthData): FufireBootstrapRequest {
   const timeStr = bd.birth_time_known && bd.time
     ? `${bd.time}:00`
     : '12:00:00';
@@ -69,16 +87,14 @@ function toBirthDataRequest(bd: ReadingRequest['birth_data'], locale?: string): 
       tz: bd.timezone,
       lat: bd.lat ?? 0.0,
       lon: bd.lon ?? 0.0,
-      ...(bd.lat !== undefined && bd.lon !== undefined
-        ? {}
-        : { place_label: 'Unknown location' }),
     },
-    locale: locale ?? 'de-DE',
   };
 }
 
-async function callFuFire(req: FufireBootstrapRequest): Promise<FufireBootstrapResponse> {
-  const url = `${config.fufireBaseUrl}/v1/experience/bootstrap`;
+// ── FuFirE API calls ──────────────────────────────────────────────────────────
+
+async function fuFetch<T>(path: string, body: unknown): Promise<T> {
+  const url = `${config.fufireBaseUrl}${path}`;
   let res: globalThis.Response;
 
   try {
@@ -88,10 +104,10 @@ async function callFuFire(req: FufireBootstrapRequest): Promise<FufireBootstrapR
         'Content-Type': 'application/json',
         'X-API-Key': config.fufireApiKey!,
       },
-      body: JSON.stringify(req),
+      body: JSON.stringify(body),
     });
   } catch (err) {
-    console.error('[fufire] Network error:', err instanceof Error ? err.message : String(err));
+    console.error(`[fufire] Network error on ${path}:`, err instanceof Error ? err.message : String(err));
     throw new HttpError(502, 'FUFIRE_ERROR', 'FuFirE API unreachable');
   }
 
@@ -100,25 +116,36 @@ async function callFuFire(req: FufireBootstrapRequest): Promise<FufireBootstrapR
   }
 
   if (!res.ok) {
-    // Log the actual FuFirE error body so we can diagnose issues
     const errBody = await res.text().catch(() => '(unreadable)');
-    console.error(`[fufire] HTTP ${res.status} error:`, errBody);
-    throw new HttpError(502, 'FUFIRE_ERROR', 'FuFirE API returned an error');
+    console.error(`[fufire] ${path} HTTP ${res.status}:`, errBody);
+    throw new HttpError(502, 'FUFIRE_ERROR', `FuFirE ${path} returned an error`);
   }
 
-  const body = await res.json() as FufireBootstrapResponse;
-
-  // Log top-level response keys once (debug — remove in production when shape is confirmed)
-  console.log('[fufire] response keys:', Object.keys(body));
-
-  return body;
+  const data = await res.json() as T;
+  // Debug: log response keys for each endpoint (remove once shapes confirmed)
+  console.log(`[fufire] ${path} keys:`, Object.keys(data as Record<string, unknown>));
+  return data;
 }
+
+/**
+ * Calls all 3 FuFirE endpoints for a single person in parallel:
+ * 1. /experience/bootstrap (nested format)
+ * 2. /calculate/bazi (flat format)
+ * 3. /calculate/wuxing (flat format)
+ */
+async function callAllEndpoints(bd: BirthData) {
+  const [bootstrap, bazi, wuxing] = await Promise.all([
+    fuFetch<FufireBootstrapResponse>('/experience/bootstrap', toBootstrapRequest(bd)),
+    fuFetch<FufireBaziResponse>('/calculate/bazi', toCalculateRequest(bd)),
+    fuFetch<FufireWuxingResponse>('/calculate/wuxing', toCalculateRequest(bd)),
+  ]);
+  return { bootstrap, bazi, wuxing };
+}
+
+type PersonReading = Awaited<ReturnType<typeof callAllEndpoints>>;
 
 // ── Teaser strip (DEC-teaser-server-strip) ────────────────────────────────────
 
-/**
- * Extracts a safe string from a deeply nested unknown object.
- */
 function pick(obj: unknown, ...path: string[]): string | undefined {
   let cur: unknown = obj;
   for (const key of path) {
@@ -128,99 +155,55 @@ function pick(obj: unknown, ...path: string[]): string | undefined {
   return typeof cur === 'string' ? cur : undefined;
 }
 
-function pickNum(obj: unknown, ...path: string[]): number | undefined {
-  let cur: unknown = obj;
-  for (const key of path) {
-    if (cur === null || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[key];
-  }
-  return typeof cur === 'number' ? cur : undefined;
-}
+// Map German element names to English for display
+const ELEMENT_MAP: Record<string, string> = {
+  Holz: 'Wood', Feuer: 'Fire', Erde: 'Earth', Metall: 'Metal', Wasser: 'Water',
+};
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+function toPersonTeaser(data: PersonReading): PersonTeaser {
+  const { bootstrap, bazi, wuxing } = data;
 
-/**
- * Extracts a PersonTeaser from a FuFirE BootstrapResponse.
- *
- * NOTE: The exact ProfileSummary schema is not fully known (spec truncated).
- * We try multiple plausible field paths with fallbacks. Once a real response
- * is observed via server logs, update the paths here.
- *
- * Known from spec:
- * - soulprint_sectors: number[12]
- * - profile: unknown ProfileSummary
- * - signature_blueprint: unknown SignatureBlueprint
- */
-function toPersonTeaser(raw: FufireBootstrapResponse): PersonTeaser {
-  const p = raw.profile;
-  const sb = raw.signature_blueprint;
-
-  // Try common field paths for sun sign
+  // Sun sign: from bootstrap profile (try several paths)
   const sun_sign =
-    pick(p, 'western', 'sun_sign') ??
-    pick(p, 'sun_sign') ??
-    pick(p, 'zodiac', 'sun_sign') ??
-    pick(sb, 'sun_sign') ??
+    pick(bootstrap.profile, 'sun_sign') ??
+    pick(bootstrap.profile, 'western', 'sun_sign') ??
+    pick(bootstrap, 'sun_sign') ??
     'Unknown';
 
-  // Chinese year animal
+  // Chinese year animal: from bazi endpoint (definitive)
   const chinese_year_animal =
-    pick(p, 'bazi', 'year_pillar', 'animal') ??
-    pick(p, 'year_animal') ??
-    pick(p, 'chinese', 'year_animal') ??
-    pick(sb, 'year_animal') ??
+    bazi.pillars?.year?.animal ??
+    pick(bootstrap.profile, 'bazi', 'year_pillar', 'animal') ??
     'Unknown';
 
-  // Nakshatra
+  // Nakshatra: from bootstrap profile (try several paths)
   const nakshatra =
-    pick(p, 'vedic', 'nakshatra') ??
-    pick(p, 'nakshatra') ??
-    pick(sb, 'nakshatra') ??
+    pick(bootstrap.profile, 'nakshatra') ??
+    pick(bootstrap.profile, 'vedic', 'nakshatra') ??
     'Unknown';
 
-  // Element summary — try to build from element_balance or use pre-formatted string
-  const element_summary =
-    pick(p, 'element_summary') ??
-    pick(sb, 'element_summary') ??
-    buildElementSummary(p) ??
-    'Unknown';
+  // Element summary: from wuxing endpoint (definitive)
+  const rawElement = wuxing.dominant_element ?? 'Unknown';
+  const engElement = ELEMENT_MAP[rawElement] ?? rawElement;
+  const maxScore = wuxing.wu_xing_vector
+    ? Math.max(...Object.values(wuxing.wu_xing_vector))
+    : 0;
+  const total = wuxing.wu_xing_vector
+    ? Object.values(wuxing.wu_xing_vector).reduce((a, b) => a + b, 0)
+    : 1;
+  const pct = total > 0 ? Math.round((maxScore / total) * 100) : 0;
+  const element_summary = `${engElement} dominant (${pct}%)`;
 
-  // Preview text — try several plausible locations
+  // Preview text: from bootstrap signature_blueprint or profile
   const preview_text =
-    pick(sb, 'preview_text') ??
-    pick(sb, 'text') ??
-    pick(sb, 'summary') ??
-    pick(p, 'preview_text') ??
-    pick(p, 'summary') ??
+    pick(bootstrap.signature_blueprint, 'preview_text') ??
+    pick(bootstrap.signature_blueprint, 'text') ??
+    pick(bootstrap.signature_blueprint, 'summary') ??
+    pick(bootstrap.profile, 'summary') ??
+    pick(bootstrap.profile, 'preview_text') ??
     'Your reading is ready — unlock to see the full analysis.';
 
   return { sun_sign, chinese_year_animal, nakshatra, element_summary, preview_text };
-}
-
-function buildElementSummary(profile: unknown): string | undefined {
-  if (!profile || typeof profile !== 'object') return undefined;
-  const p = profile as Record<string, unknown>;
-
-  // Try bazi.element_balance
-  const eb =
-    (p['bazi'] as Record<string, unknown> | undefined)?.['element_balance'] ??
-    p['element_balance'];
-
-  if (!eb || typeof eb !== 'object') return undefined;
-
-  const balance = eb as Record<string, unknown>;
-  let maxVal = -Infinity;
-  let maxKey = '';
-  for (const [key, val] of Object.entries(balance)) {
-    if (typeof val === 'number' && val > maxVal) {
-      maxVal = val;
-      maxKey = key;
-    }
-  }
-  if (!maxKey) return undefined;
-  return `${capitalize(maxKey)} dominant (${Math.round(maxVal * 100)}%)`;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -246,17 +229,23 @@ readingRouter.post('/', async (req: Request, res: Response, next: NextFunction) 
       throw new HttpError(400, 'INVALID_INPUT', 'partner_birth_data must not be set for character mode');
     }
 
-    const subjectRaw = await callFuFire(toBirthDataRequest(body.birth_data));
+    // Call FuFirE: 3 endpoints per person, all in parallel
+    let subjectData: PersonReading;
+    let partnerData: PersonReading | undefined;
 
-    let partnerRaw: FufireBootstrapResponse | undefined;
     if (body.mode === 'partnership') {
-      partnerRaw = await callFuFire(toBirthDataRequest(body.partner_birth_data!));
+      [subjectData, partnerData] = await Promise.all([
+        callAllEndpoints(body.birth_data),
+        callAllEndpoints(body.partner_birth_data!),
+      ]);
+    } else {
+      subjectData = await callAllEndpoints(body.birth_data);
     }
 
     const teaser: TeaserReading = {
       mode: body.mode,
-      subject: toPersonTeaser(subjectRaw),
-      ...(partnerRaw ? { partner: toPersonTeaser(partnerRaw) } : {}),
+      subject: toPersonTeaser(subjectData),
+      ...(partnerData ? { partner: toPersonTeaser(partnerData) } : {}),
     };
 
     const reading_hash = createSession(body.mode, body.birth_data, body.partner_birth_data);

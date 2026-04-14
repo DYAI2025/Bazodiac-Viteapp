@@ -2,8 +2,24 @@ import React, { useRef, useLayoutEffect, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { SunIcon, CornerBrackets } from '../components/SunIcon';
-import { Info, Loader2 } from 'lucide-react';
+import { Info, Loader2, MapPin } from 'lucide-react';
 import type { ReadingResponse } from '../types/reading';
+
+/** Geocode a place name via Nominatim (OpenStreetMap). Returns lat/lon or undefined. */
+async function geocode(place: string): Promise<{ lat: number; lon: number } | undefined> {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(place)}`;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Bazodiac/1.0' },
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json() as Array<{ lat: string; lon: string }>;
+    if (data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+  } catch { /* geocoding failure is non-fatal — fall back to default coords */ }
+  return undefined;
+}
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -23,9 +39,13 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
   const [birthDate, setBirthDate] = useState('');
   const [birthTime, setBirthTime] = useState('');
   const [birthTimeKnown, setBirthTimeKnown] = useState(false);
+  const [birthPlace, setBirthPlace] = useState('');
+  const [birthPlaceKnown, setBirthPlaceKnown] = useState(false);
   const [partnerDate, setPartnerDate] = useState('');
   const [partnerTime, setPartnerTime] = useState('');
   const [partnerTimeKnown, setPartnerTimeKnown] = useState(false);
+  const [partnerPlace, setPartnerPlace] = useState('');
+  const [partnerPlaceKnown, setPartnerPlaceKnown] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +120,27 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
 
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    // Geocode birth place(s) if provided
+    const birthCoords = birthPlaceKnown && birthPlace
+      ? await geocode(birthPlace)
+      : undefined;
+
+    const partnerCoords = partnerPlaceKnown && partnerPlace
+      ? await geocode(partnerPlace)
+      : undefined;
+
+    if (birthPlaceKnown && birthPlace && !birthCoords) {
+      setError('Could not find that birth place — please check the spelling.');
+      setLoading(false);
+      return;
+    }
+
+    if (partnerPlaceKnown && partnerPlace && !partnerCoords) {
+      setError('Could not find partner\'s birth place — please check the spelling.');
+      setLoading(false);
+      return;
+    }
+
     const body = {
       mode: pathType ?? 'character',
       birth_data: {
@@ -107,6 +148,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
         ...(birthTimeKnown && birthTime ? { time: birthTime } : {}),
         birth_time_known: birthTimeKnown,
         timezone,
+        ...(birthCoords ? { lat: birthCoords.lat, lon: birthCoords.lon } : {}),
       },
       ...(pathType === 'partnership' && partnerDate
         ? {
@@ -115,6 +157,7 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
               ...(partnerTimeKnown && partnerTime ? { time: partnerTime } : {}),
               birth_time_known: partnerTimeKnown,
               timezone,
+              ...(partnerCoords ? { lat: partnerCoords.lat, lon: partnerCoords.lon } : {}),
             },
           }
         : {}),
@@ -149,7 +192,9 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
 
   const isValid =
     birthDate !== '' &&
-    (pathType !== 'partnership' || partnerDate !== '');
+    (!birthPlaceKnown || birthPlace.trim() !== '') &&
+    (pathType !== 'partnership' || partnerDate !== '') &&
+    (pathType !== 'partnership' || !partnerPlaceKnown || partnerPlace.trim() !== '');
 
   return (
     <section
@@ -213,7 +258,10 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
                   <input
                     type="checkbox"
                     checked={birthTimeKnown}
-                    onChange={(e) => setBirthTimeKnown(e.target.checked)}
+                    onChange={(e) => {
+                      setBirthTimeKnown(e.target.checked);
+                      if (!e.target.checked) setBirthPlaceKnown(false);
+                    }}
                     className="accent-[#C8A14A]"
                   />
                   Birth Time known
@@ -227,6 +275,33 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
                   />
                 )}
               </div>
+
+              {/* Birth Place — only shown when birth time is known */}
+              {birthTimeKnown && (
+                <div>
+                  <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-[#6D6A61] mb-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={birthPlaceKnown}
+                      onChange={(e) => setBirthPlaceKnown(e.target.checked)}
+                      className="accent-[#C8A14A]"
+                    />
+                    Birth Place known
+                  </label>
+                  {birthPlaceKnown && (
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6D6A61]" />
+                      <input
+                        type="text"
+                        value={birthPlace}
+                        onChange={(e) => setBirthPlace(e.target.value)}
+                        placeholder="e.g. Berlin, Germany"
+                        className="w-full pl-9 pr-4 py-3 bg-[#F4EFE6] border border-[#E5DDD1] rounded-sm text-[#14181F] placeholder:text-[#6D6A61]/50 focus:outline-none focus:border-[#C8A14A] transition-colors"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Partner fields */}
               {pathType === 'partnership' && (
@@ -248,7 +323,10 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
                       <input
                         type="checkbox"
                         checked={partnerTimeKnown}
-                        onChange={(e) => setPartnerTimeKnown(e.target.checked)}
+                        onChange={(e) => {
+                          setPartnerTimeKnown(e.target.checked);
+                          if (!e.target.checked) setPartnerPlaceKnown(false);
+                        }}
                         className="accent-[#C8A14A]"
                       />
                       Partner's Birth Time known
@@ -262,6 +340,33 @@ export const InputSection: React.FC<InputSectionProps> = ({ pathType, onReadingR
                       />
                     )}
                   </div>
+
+                  {/* Partner Birth Place */}
+                  {partnerTimeKnown && (
+                    <div>
+                      <label className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.12em] text-[#6D6A61] mb-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={partnerPlaceKnown}
+                          onChange={(e) => setPartnerPlaceKnown(e.target.checked)}
+                          className="accent-[#C8A14A]"
+                        />
+                        Partner's Birth Place known
+                      </label>
+                      {partnerPlaceKnown && (
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6D6A61]" />
+                          <input
+                            type="text"
+                            value={partnerPlace}
+                            onChange={(e) => setPartnerPlace(e.target.value)}
+                            placeholder="e.g. Munich, Germany"
+                            className="w-full pl-9 pr-4 py-3 bg-[#F4EFE6] border border-[#E5DDD1] rounded-sm text-[#14181F] placeholder:text-[#6D6A61]/50 focus:outline-none focus:border-[#C8A14A] transition-colors"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>

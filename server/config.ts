@@ -1,3 +1,5 @@
+import { HttpError } from './errorHandler.js';
+
 /**
  * Environment variable configuration with startup validation.
  *
@@ -62,8 +64,10 @@ function validateConfig(): Config {
 export function requireVars(vars: Array<keyof Config>, featureName: string): void {
   const missing = vars.filter((key) => !config[key]);
   if (missing.length > 0) {
-    throw new Error(
-      `[config] ${featureName} requires environment variables that are not set: ${missing.join(', ')}`
+    throw new HttpError(
+      503,
+      'SERVICE_UNAVAILABLE',
+      `${featureName} is not available — server configuration incomplete`
     );
   }
 }

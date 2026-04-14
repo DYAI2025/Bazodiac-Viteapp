@@ -2,7 +2,7 @@
  * BFF-only types — never sent to the SPA client.
  *
  * SessionEntry: in-memory session store entry.
- * FufireBootstrapRequest/Response: verified against FuFirE OpenAPI spec 2026-04-14.
+ * FuFirE API types: verified against actual endpoints 2026-04-14.
  */
 
 import type { BirthData } from '../src/types/reading.js';
@@ -22,29 +22,80 @@ export interface SessionEntry {
 // ── FuFirE API ────────────────────────────────────────────────────────────────
 
 /**
- * Verified request shape from openapi.json BirthInput schema.
- * All birth fields are required; time must be HH:MM:SS.
+ * Flat request format used by /calculate/bazi, /calculate/wuxing, /calculate/fusion.
+ * Fields: date, time, lat, lon, timezone.
  */
-export interface FufireBootstrapRequest {
-  birth: {
-    date: string;          // "YYYY-MM-DD"
-    time: string;          // "HH:MM:SS" — required; use "12:00:00" when unknown
-    tz: string;            // IANA timezone
-    lat: number;           // decimal degrees (required)
-    lon: number;           // decimal degrees (required)
-    place_label?: string;
-  };
-  locale?: string;         // default "de-DE"
+export interface FufireCalculateRequest {
+  date: string;       // "YYYY-MM-DD"
+  time: string;       // "HH:MM"
+  lat: number;
+  lon: number;
+  timezone: string;   // IANA timezone
 }
 
 /**
- * Raw response from POST /v1/experience/bootstrap.
- * The exact shape of profile/signature_blueprint is resolved at runtime
- * (spec truncated). We cast loosely and extract what we need.
+ * Nested request format used by /experience/bootstrap.
+ * Fields wrapped in birth object; time must be HH:MM:SS; tz not timezone.
+ */
+export interface FufireBootstrapRequest {
+  birth: {
+    date: string;       // "YYYY-MM-DD"
+    time: string;       // "HH:MM:SS"
+    tz: string;         // IANA timezone (NOT "timezone")
+    lat: number;
+    lon: number;
+    place_label?: string;
+  };
+  locale?: string;
+}
+
+/**
+ * POST /calculate/bazi response.
+ * Pillars (year/month/day/hour) with Stamm, Zweig, Tier, Element.
+ */
+export interface FufireBaziResponse {
+  pillars: {
+    year:  { stem: string; branch: string; animal: string; element: string };
+    month: { stem: string; branch: string; element: string };
+    day:   { stem: string; branch: string; element: string };
+    hour?: { stem: string; branch: string; element: string };
+  };
+  chinese: {
+    day_master: string; // e.g. "Xin"
+  };
+  transition: {
+    is_before_lichun: boolean;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * POST /calculate/wuxing response.
+ * Weighted element scores and dominant element.
+ */
+export interface FufireWuxingResponse {
+  wu_xing_vector: {
+    Holz: number;
+    Feuer: number;
+    Erde: number;
+    Metall: number;
+    Wasser: number;
+  };
+  dominant_element: string; // e.g. "Holz"
+  contribution_ledger?: {
+    western?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * POST /experience/bootstrap response.
+ * Compact profile with western astrology, harmony, soulprint, narrative.
  */
 export interface FufireBootstrapResponse {
   profile: Record<string, unknown>;
-  soulprint_sectors: number[];   // 12 numeric values
+  soulprint_sectors: number[];        // 12 numeric values
   signature_blueprint: Record<string, unknown>;
   meta: Record<string, unknown>;
 }
