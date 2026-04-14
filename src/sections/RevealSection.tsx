@@ -126,7 +126,7 @@ export const RevealSection: React.FC<RevealSectionProps> = ({
                 <p className="text-[#14181F]">{subject.chinese_year_animal}</p>
               </div>
               <div>
-                <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#6D6A61]">Nakshatra</p>
+                <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#6D6A61]">Ascendant</p>
                 <p className="text-[#14181F]">{subject.nakshatra}</p>
               </div>
               <div>

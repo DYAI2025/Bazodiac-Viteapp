@@ -55,16 +55,20 @@ export interface FufireBootstrapRequest {
  */
 export interface FufireBaziResponse {
   pillars: {
-    year:  { stem: string; branch: string; animal: string; element: string };
-    month: { stem: string; branch: string; element: string };
-    day:   { stem: string; branch: string; element: string };
-    hour?: { stem: string; branch: string; element: string };
+    year:  { stamm: string; zweig: string; tier: string; element: string };
+    month: { stamm: string; zweig: string; tier: string; element: string };
+    day:   { stamm: string; zweig: string; tier: string; element: string };
+    hour?: { stamm: string; zweig: string; tier: string; element: string };
   };
   chinese: {
-    day_master: string; // e.g. "Xin"
+    day_master: string;
+    hour_master: string;
+    month_master: string;
+    year: { animal: string; branch: string; stem: string };
   };
   transition: {
     is_before_lichun: boolean;
+    solar_year: number;
   };
   [key: string]: unknown;
 }

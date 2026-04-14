@@ -160,29 +160,35 @@ const ELEMENT_MAP: Record<string, string> = {
   Holz: 'Wood', Feuer: 'Fire', Erde: 'Earth', Metall: 'Metal', Wasser: 'Water',
 };
 
+/**
+ * Verified field paths (2026-04-15):
+ *
+ * bootstrap.profile: { sun_sign, moon_sign, ascendant_sign, day_master, harmony_index }
+ * bootstrap.signature_blueprint: { seed (narrative text), elements, visual }
+ * bazi.chinese: { day_master, hour_master, month_master, year: { animal, branch, stem } }
+ * bazi.pillars: { year/month/day/hour: { stamm, zweig, tier, element } }
+ * wuxing: { wu_xing_vector: { Holz, Feuer, Erde, Metall, Wasser }, dominant_element }
+ *
+ * Nakshatra: NOT available in FuFirE — replaced with ascendant_sign.
+ */
 function toPersonTeaser(data: PersonReading): PersonTeaser {
   const { bootstrap, bazi, wuxing } = data;
 
-  // Sun sign: from bootstrap profile (try several paths)
+  // Sun sign: bootstrap.profile.sun_sign (verified)
   const sun_sign =
-    pick(bootstrap.profile, 'sun_sign') ??
-    pick(bootstrap.profile, 'western', 'sun_sign') ??
-    pick(bootstrap, 'sun_sign') ??
-    'Unknown';
+    pick(bootstrap.profile, 'sun_sign') ?? 'Unknown';
 
-  // Chinese year animal: from bazi endpoint (definitive)
+  // Chinese year animal: bazi.chinese.year.animal (verified)
   const chinese_year_animal =
-    bazi.pillars?.year?.animal ??
-    pick(bootstrap.profile, 'bazi', 'year_pillar', 'animal') ??
+    pick(bazi, 'chinese', 'year', 'animal') ??
+    bazi.pillars?.year?.animal ??    // fallback to pillars if chinese missing
     'Unknown';
 
-  // Nakshatra: from bootstrap profile (try several paths)
+  // Ascendant (replaces Nakshatra — FuFirE has no Vedic calculation)
   const nakshatra =
-    pick(bootstrap.profile, 'nakshatra') ??
-    pick(bootstrap.profile, 'vedic', 'nakshatra') ??
-    'Unknown';
+    pick(bootstrap.profile, 'ascendant_sign') ?? 'Unknown';
 
-  // Element summary: from wuxing endpoint (definitive)
+  // Element summary: from wuxing endpoint (verified)
   const rawElement = wuxing.dominant_element ?? 'Unknown';
   const engElement = ELEMENT_MAP[rawElement] ?? rawElement;
   const maxScore = wuxing.wu_xing_vector
@@ -194,13 +200,9 @@ function toPersonTeaser(data: PersonReading): PersonTeaser {
   const pct = total > 0 ? Math.round((maxScore / total) * 100) : 0;
   const element_summary = `${engElement} dominant (${pct}%)`;
 
-  // Preview text: from bootstrap signature_blueprint or profile
+  // Preview text: signature_blueprint.seed is the narrative string (verified)
   const preview_text =
-    pick(bootstrap.signature_blueprint, 'preview_text') ??
-    pick(bootstrap.signature_blueprint, 'text') ??
-    pick(bootstrap.signature_blueprint, 'summary') ??
-    pick(bootstrap.profile, 'summary') ??
-    pick(bootstrap.profile, 'preview_text') ??
+    pick(bootstrap.signature_blueprint, 'seed') ??
     'Your reading is ready — unlock to see the full analysis.';
 
   return { sun_sign, chinese_year_animal, nakshatra, element_summary, preview_text };
