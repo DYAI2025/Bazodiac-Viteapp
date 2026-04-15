@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { notFoundHandler, errorHandler } from './errorHandler.js';
 import { readingRouter } from './routes/reading.js';
+import { checkoutRouter } from './routes/checkout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -28,8 +29,8 @@ app.get('/health', (_req, res) => {
 // ── API routes ───────────────────────────────────────────────────────────────
 
 app.use('/api/reading', readingRouter);
+app.use('/api/checkout', checkoutRouter);
 
-// POST /api/checkout        — Phase 3
 // GET  /api/reading/unlock  — Phase 3
 // POST /api/webhooks/stripe — Phase 3
 
