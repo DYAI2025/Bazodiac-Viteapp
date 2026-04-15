@@ -12,30 +12,87 @@ import { HowItWorksSection } from './sections/HowItWorksSection';
 import { SampleReadingsSection } from './sections/SampleReadingsSection';
 import { ClosingSection } from './sections/ClosingSection';
 
-import type { ReadingResponse } from './types/reading';
+import type { ReadingResponse, FullReading } from './types/reading';
 
 gsap.registerPlugin(ScrollTrigger);
 
 function App() {
   const [selectedPath, setSelectedPath] = useState<'character' | 'partnership' | null>(null);
   const [readingResponse, setReadingResponse] = useState<ReadingResponse | null>(null);
+  const [fullReading, setFullReading] = useState<FullReading | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
 
   const mainRef = useRef<HTMLElement>(null);
   const scrollTriggersRef = useRef<ScrollTrigger[]>([]);
 
-  const handleReadingReady = useCallback((response: ReadingResponse) => {
-    setReadingResponse(response);
+  // On page load: check for ?session_id= from Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    if (!sessionId) return;
+
+    // Clean the URL without reloading
+    window.history.replaceState({}, '', '/');
+
+    // Call unlock endpoint
+    (async () => {
+      try {
+        const res = await fetch(`/api/reading/unlock?session_id=${encodeURIComponent(sessionId)}`);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unlock failed' }));
+          setUnlockError((err as { error?: string }).error ?? 'Could not unlock reading');
+          return;
+        }
+        const data = await res.json() as { full_reading: FullReading };
+        setFullReading(data.full_reading);
+
+        // Scroll to reveal section to show the full reading
+        setTimeout(() => {
+          document.getElementById('reveal-section')?.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      } catch {
+        setUnlockError('Network error — could not unlock reading');
+      }
+    })();
   }, []);
 
-  const handleUnlock = useCallback((readingHash: string) => {
-    // Phase 3: will call POST /api/checkout with readingHash
-    // For now, alert so the feature is clearly gated
-    alert(`Checkout coming in Phase 3 — reading hash: ${readingHash}`);
+  const handleReadingReady = useCallback((response: ReadingResponse) => {
+    setReadingResponse(response);
+    setFullReading(null);
+    setUnlockError(null);
+  }, []);
+
+  const handleUnlock = useCallback(async (readingHash: string) => {
+    setCheckoutLoading(true);
+    setUnlockError(null);
+
+    try {
+      const locale = navigator.language.startsWith('de') ? 'de' : 'en';
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reading_hash: readingHash, locale }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Checkout failed' }));
+        setUnlockError((err as { error?: string }).error ?? 'Could not start checkout');
+        return;
+      }
+
+      const data = await res.json() as { checkout_url: string };
+      // Redirect to Stripe Checkout — user returns via success_url with ?session_id=
+      window.location.href = data.checkout_url;
+    } catch {
+      setUnlockError('Network error — please try again');
+    } finally {
+      setCheckoutLoading(false);
+    }
   }, []);
 
   const handleSelectPath = useCallback((path: 'character' | 'partnership') => {
     setSelectedPath(path);
-
     setTimeout(() => {
       document.getElementById('input-section')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -48,6 +105,8 @@ function App() {
   const handleRestart = useCallback(() => {
     setSelectedPath(null);
     setReadingResponse(null);
+    setFullReading(null);
+    setUnlockError(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
@@ -117,17 +176,14 @@ function App() {
       <Navigation onNavigate={handleNavigate} />
 
       <main ref={mainRef} className="relative">
-        {/* Section 1: Hero - pin: true */}
         <div id="hero-section">
           <HeroSection onBegin={handleBegin} />
         </div>
 
-        {/* Section 2: Two Paths - pin: true */}
         <div id="paths-section">
           <TwoPathsSection onSelectPath={handleSelectPath} />
         </div>
 
-        {/* Section 3: Input Ceremony - pin: true */}
         <div id="input-section">
           <InputSection
             pathType={selectedPath}
@@ -135,26 +191,25 @@ function App() {
           />
         </div>
 
-        {/* Section 4: The Reveal - pin: true */}
         <div id="reveal-section">
           <RevealSection
             teaser={readingResponse?.teaser ?? null}
             readingHash={readingResponse?.reading_hash ?? null}
+            fullReading={fullReading}
             onUnlock={handleUnlock}
+            checkoutLoading={checkoutLoading}
+            unlockError={unlockError}
           />
         </div>
 
-        {/* Section 5: How It Works - pin: false (flowing) */}
         <div id="how-it-works-section">
           <HowItWorksSection />
         </div>
 
-        {/* Section 6: Sample Readings - pin: false (flowing) */}
         <div id="sample-readings-section">
           <SampleReadingsSection />
         </div>
 
-        {/* Section 7: Closing - pin: false (flowing) */}
         <div id="closing-section">
           <ClosingSection onRestart={handleRestart} />
         </div>
