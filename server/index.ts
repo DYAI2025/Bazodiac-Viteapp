@@ -6,6 +6,7 @@ import { notFoundHandler, errorHandler } from './errorHandler.js';
 import { readingRouter } from './routes/reading.js';
 import { checkoutRouter } from './routes/checkout.js';
 import { unlockRouter } from './routes/unlock.js';
+import { webhookRouter } from './routes/webhook.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,6 +19,9 @@ app.use((req, _res, next) => {
   console.log(`[req] ${req.method} ${req.path}${bodyLoggable ? '' : ' (body omitted)'}`);
   next();
 });
+
+// Stripe webhook needs raw body for signature validation — register BEFORE express.json()
+app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }), webhookRouter);
 
 app.use(express.json({ limit: '16kb' }));
 
@@ -33,7 +37,6 @@ app.use('/api/reading/unlock', unlockRouter); // must come before /api/reading (
 app.use('/api/reading', readingRouter);
 app.use('/api/checkout', checkoutRouter);
 
-// POST /api/webhooks/stripe — Phase 3
 
 // ── Serve Vite production build ──────────────────────────────────────────────
 
