@@ -2,8 +2,117 @@ import React, { useRef, useLayoutEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { CornerBrackets } from '../components/SunIcon';
-import { Lock, Loader2, CheckCircle } from 'lucide-react';
-import type { TeaserReading, FullReading } from '../types/reading';
+import { Lock, Loader2, CheckCircle, Star, Compass, Flame } from 'lucide-react';
+import type { TeaserReading, FullReading, PersonProfile } from '../types/reading';
+
+const SECTOR_NAMES = [
+  'Identity', 'Values', 'Communication', 'Home', 'Creativity', 'Service',
+  'Partnership', 'Transformation', 'Vision', 'Achievement', 'Community', 'Spirit',
+];
+
+function FullReadingPanel({ profile, label }: { profile: PersonProfile; label: string }) {
+  const harmonyDisplay = Math.round(
+    profile.harmony_index > 1 ? profile.harmony_index : profile.harmony_index * 100
+  );
+
+  return (
+    <div className="space-y-3">
+      {/* Section label */}
+      <p className="font-mono text-xs uppercase tracking-[0.18em] text-[#C8A14A]">{label}</p>
+
+      {/* Western Astrology */}
+      <div className="bg-[rgba(255,255,255,0.06)] rounded-sm p-4 border border-[#F4EFE6]/10">
+        <div className="flex items-center gap-2 mb-3">
+          <Star className="w-3.5 h-3.5 text-[#C8A14A]" />
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#C8A14A]">Western Astrology</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div>
+            <p className="text-xs text-[#F4EFE6]/40">Sun</p>
+            <p className="text-sm text-[#F4EFE6] font-medium">{profile.sun_sign}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[#F4EFE6]/40">Moon</p>
+            <p className="text-sm text-[#F4EFE6] font-medium">{profile.moon_sign}</p>
+          </div>
+          <div>
+            <p className="text-xs text-[#F4EFE6]/40">Rising</p>
+            <p className="text-sm text-[#F4EFE6] font-medium">{profile.ascendant}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* BaZi Four Pillars */}
+      <div className="bg-[rgba(255,255,255,0.06)] rounded-sm p-4 border border-[#F4EFE6]/10">
+        <div className="flex items-center gap-2 mb-3">
+          <Compass className="w-3.5 h-3.5 text-[#C8A14A]" />
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#C8A14A]">Four Pillars · {profile.day_master}</p>
+        </div>
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {(['year', 'month', 'day', 'hour'] as const).map(pillar => {
+            const p = profile.four_pillars[pillar];
+            if (!p) return <div key={pillar} className="opacity-30 text-xs text-[#F4EFE6]/40">—</div>;
+            return (
+              <div key={pillar} className="space-y-1">
+                <p className="text-[10px] text-[#F4EFE6]/40 uppercase">{pillar}</p>
+                <p className="text-sm text-[#F4EFE6] font-medium">{p.stamm}</p>
+                <p className="text-xs text-[#F4EFE6]/60">{p.zweig}</p>
+                {pillar === 'year' && 'tier' in p && (
+                  <p className="text-xs text-[#C8A14A]">{(p as { tier: string }).tier}</p>
+                )}
+                <p className="text-[10px] text-[#F4EFE6]/30">{p.element}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Wu-Xing Element Balance */}
+      <div className="bg-[rgba(255,255,255,0.06)] rounded-sm p-4 border border-[#F4EFE6]/10">
+        <div className="flex items-center gap-2 mb-3">
+          <Flame className="w-3.5 h-3.5 text-[#C8A14A]" />
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#C8A14A]">Wu-Xing Balance</p>
+        </div>
+        {Object.entries(profile.element_balance).map(([el, val]) => (
+          <div key={el} className="flex items-center gap-2 mb-1.5">
+            <span className="text-xs text-[#F4EFE6]/60 w-12 capitalize">{el}</span>
+            <div className="flex-1 h-2 bg-[#F4EFE6]/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#C8A14A] to-[#D4B76A] rounded-full transition-all duration-500"
+                style={{ width: `${Math.round(val * 100)}%` }}
+              />
+            </div>
+            <span className="text-xs text-[#F4EFE6]/40 w-10 text-right">{Math.round(val * 100)}%</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Soulprint Sectors */}
+      {profile.soulprint_sectors.length > 0 && (
+        <div className="bg-[rgba(255,255,255,0.06)] rounded-sm p-4 border border-[#F4EFE6]/10">
+          <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#C8A14A] mb-3">Soulprint Sectors</p>
+          <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+            {profile.soulprint_sectors.map((val, i) => {
+              const pct = Math.round(val * 100);
+              return (
+                <div key={i} className="flex items-center justify-between">
+                  <span className="text-[10px] text-[#F4EFE6]/50 truncate mr-1">{SECTOR_NAMES[i] ?? `S${i + 1}`}</span>
+                  <span className="text-xs text-[#C8A14A] font-medium">{pct}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Harmony Index */}
+      <div className="flex items-center justify-between bg-[rgba(255,255,255,0.04)] rounded-sm px-4 py-3 border border-[#F4EFE6]/10">
+        <span className="font-mono text-xs uppercase tracking-[0.12em] text-[#F4EFE6]/40">Harmony Index</span>
+        <span className="text-2xl text-[#C8A14A] font-light">{harmonyDisplay}</span>
+      </div>
+    </div>
+  );
+}
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -190,56 +299,17 @@ export const RevealSection: React.FC<RevealSectionProps> = ({
 
         <div ref={indexRef}>
           {isUnlocked ? (
-            // Full reading content (TASK-spa-full-reading-display will expand this)
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-[#C8A14A] mb-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin">
+              <div className="flex items-center gap-2 text-[#C8A14A] mb-2">
                 <CheckCircle className="w-5 h-5" />
                 <span className="text-sm font-medium">Reading unlocked</span>
               </div>
 
-              {/* Four Pillars */}
-              <div className="bg-[rgba(255,255,255,0.06)] rounded-sm p-4 border border-[#F4EFE6]/10">
-                <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#C8A14A] mb-3">Four Pillars</p>
-                <div className="grid grid-cols-4 gap-2 text-center">
-                  {(['year', 'month', 'day', 'hour'] as const).map(pillar => {
-                    const p = fullReading.subject.four_pillars[pillar];
-                    if (!p) return null;
-                    return (
-                      <div key={pillar} className="space-y-1">
-                        <p className="text-xs text-[#F4EFE6]/40 capitalize">{pillar}</p>
-                        <p className="text-sm text-[#F4EFE6]">{p.stamm}</p>
-                        <p className="text-xs text-[#F4EFE6]/60">{p.zweig}</p>
-                        {pillar === 'year' && 'tier' in p && <p className="text-xs text-[#C8A14A]">{(p as { tier: string }).tier}</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <FullReadingPanel profile={fullReading.subject} label="Your Portrait" />
 
-              {/* Element Balance */}
-              <div className="bg-[rgba(255,255,255,0.06)] rounded-sm p-4 border border-[#F4EFE6]/10">
-                <p className="font-mono text-xs uppercase tracking-[0.12em] text-[#C8A14A] mb-3">Wu-Xing Balance</p>
-                {Object.entries(fullReading.subject.element_balance).map(([el, val]) => (
-                  <div key={el} className="flex items-center gap-2 mb-1">
-                    <span className="text-xs text-[#F4EFE6]/60 w-12 capitalize">{el}</span>
-                    <div className="flex-1 h-2 bg-[#F4EFE6]/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[#C8A14A] rounded-full"
-                        style={{ width: `${Math.round(val * 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-[#F4EFE6]/40 w-8 text-right">{Math.round(val * 100)}%</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Harmony Index */}
-              <div className="text-center py-2">
-                <p className="text-xs text-[#F4EFE6]/40">Harmony Index</p>
-                <p className="text-3xl text-[#C8A14A] font-light">
-                  {Math.round(fullReading.subject.harmony_index > 1 ? fullReading.subject.harmony_index : fullReading.subject.harmony_index * 100)}
-                </p>
-              </div>
+              {fullReading.partner && (
+                <FullReadingPanel profile={fullReading.partner} label="Partner's Portrait" />
+              )}
             </div>
           ) : (
             // Teaser + paywall
