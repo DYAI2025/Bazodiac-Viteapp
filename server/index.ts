@@ -5,6 +5,7 @@ import { config } from './config.js';
 import { notFoundHandler, errorHandler } from './errorHandler.js';
 import { readingRouter } from './routes/reading.js';
 import { checkoutRouter } from './routes/checkout.js';
+import { unlockRouter } from './routes/unlock.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -28,10 +29,10 @@ app.get('/health', (_req, res) => {
 
 // ── API routes ───────────────────────────────────────────────────────────────
 
+app.use('/api/reading/unlock', unlockRouter); // must come before /api/reading (prefix match)
 app.use('/api/reading', readingRouter);
 app.use('/api/checkout', checkoutRouter);
 
-// GET  /api/reading/unlock  — Phase 3
 // POST /api/webhooks/stripe — Phase 3
 
 // ── Serve Vite production build ──────────────────────────────────────────────

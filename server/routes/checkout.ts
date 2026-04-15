@@ -7,22 +7,14 @@
  * REQ-F-payment-integration, DEC-teaser-server-strip
  */
 
-import Stripe from 'stripe';
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { config, requireVars } from '../config.js';
 import { getSession, linkStripeSession } from '../sessionStore.js';
 import { HttpError } from '../errorHandler.js';
+import { getStripe } from '../stripe.js';
 import type { CheckoutRequest } from '../../src/types/reading.js';
 
 export const checkoutRouter = Router();
-
-let _stripe: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!_stripe) {
-    _stripe = new Stripe(config.stripeSecretKey!);
-  }
-  return _stripe;
-}
 
 checkoutRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -13,17 +13,12 @@
  */
 
 import { Router, type Request, type Response, type NextFunction } from 'express';
-import { config, requireVars } from '../config.js';
+import { requireVars } from '../config.js';
 import { createSession } from '../sessionStore.js';
 import { HttpError } from '../errorHandler.js';
-import type { ReadingRequest, TeaserReading, PersonTeaser, BirthData } from '../../src/types/reading.js';
-import type {
-  FufireBootstrapRequest,
-  FufireBootstrapResponse,
-  FufireCalculateRequest,
-  FufireBaziResponse,
-  FufireWuxingResponse,
-} from '../types.js';
+import { callAllEndpoints, type PersonReading } from '../fufire.js';
+import { pick, ELEMENT_DE_TO_EN } from '../utils.js';
+import type { ReadingRequest, TeaserReading, PersonTeaser } from '../../src/types/reading.js';
 
 export const readingRouter = Router();
 
@@ -55,113 +50,13 @@ function validateBirthData(data: unknown, fieldPath: string): void {
   }
 }
 
-// ── Request builders ──────────────────────────────────────────────────────────
-
-/**
- * Flat format for /calculate/bazi, /calculate/wuxing, /calculate/fusion.
- * Fields: date, time ("HH:MM"), lat, lon, timezone.
- */
-function toCalculateRequest(bd: BirthData): FufireCalculateRequest {
-  return {
-    date: bd.date,
-    time: bd.birth_time_known && bd.time ? bd.time : '12:00',
-    lat: bd.lat ?? 0.0,
-    lon: bd.lon ?? 0.0,
-    timezone: bd.timezone,
-  };
-}
-
-/**
- * Nested format for /experience/bootstrap.
- * Fields in birth object; time "HH:MM:SS"; tz (not timezone).
- */
-function toBootstrapRequest(bd: BirthData): FufireBootstrapRequest {
-  const timeStr = bd.birth_time_known && bd.time
-    ? `${bd.time}:00`
-    : '12:00:00';
-
-  return {
-    birth: {
-      date: bd.date,
-      time: timeStr,
-      tz: bd.timezone,
-      lat: bd.lat ?? 0.0,
-      lon: bd.lon ?? 0.0,
-    },
-  };
-}
-
-// ── FuFirE API calls ──────────────────────────────────────────────────────────
-
-async function fuFetch<T>(path: string, body: unknown): Promise<T> {
-  const url = `${config.fufireBaseUrl}${path}`;
-  let res: globalThis.Response;
-
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': config.fufireApiKey!,
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    console.error(`[fufire] Network error on ${path}:`, err instanceof Error ? err.message : String(err));
-    throw new HttpError(502, 'FUFIRE_ERROR', 'FuFirE API unreachable');
-  }
-
-  if (res.status === 429) {
-    throw new HttpError(429, 'RATE_LIMIT', 'Reading rate limit exceeded — please try again shortly');
-  }
-
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '(unreadable)');
-    console.error(`[fufire] ${path} HTTP ${res.status}:`, errBody);
-    throw new HttpError(502, 'FUFIRE_ERROR', `FuFirE ${path} returned an error`);
-  }
-
-  return await res.json() as T;
-}
-
-/**
- * Calls all 3 FuFirE endpoints for a single person in parallel:
- * 1. /experience/bootstrap (nested format)
- * 2. /calculate/bazi (flat format)
- * 3. /calculate/wuxing (flat format)
- */
-async function callAllEndpoints(bd: BirthData) {
-  const [bootstrap, bazi, wuxing] = await Promise.all([
-    fuFetch<FufireBootstrapResponse>('/experience/bootstrap', toBootstrapRequest(bd)),
-    fuFetch<FufireBaziResponse>('/calculate/bazi', toCalculateRequest(bd)),
-    fuFetch<FufireWuxingResponse>('/calculate/wuxing', toCalculateRequest(bd)),
-  ]);
-  return { bootstrap, bazi, wuxing };
-}
-
-type PersonReading = Awaited<ReturnType<typeof callAllEndpoints>>;
-
 // ── Teaser strip (DEC-teaser-server-strip) ────────────────────────────────────
-
-function pick(obj: unknown, ...path: string[]): string | undefined {
-  let cur: unknown = obj;
-  for (const key of path) {
-    if (cur === null || typeof cur !== 'object') return undefined;
-    cur = (cur as Record<string, unknown>)[key];
-  }
-  return typeof cur === 'string' ? cur : undefined;
-}
-
-// Map German element names to English for display
-const ELEMENT_MAP: Record<string, string> = {
-  Holz: 'Wood', Feuer: 'Fire', Erde: 'Earth', Metall: 'Metal', Wasser: 'Water',
-};
 
 /**
  * Verified field paths (2026-04-15):
  *
  * bootstrap.profile: { sun_sign, moon_sign, ascendant_sign, day_master, harmony_index }
- * bootstrap.signature_blueprint: { seed (narrative text), elements, visual }
+ * bootstrap.signature_blueprint: { seed (hash, not text), elements, visual }
  * bazi.chinese: { day_master, hour_master, month_master, year: { animal, branch, stem } }
  * bazi.pillars: { year/month/day/hour: { stamm, zweig, tier, element } }
  * wuxing: { wu_xing_vector: { Holz, Feuer, Erde, Metall, Wasser }, dominant_element }
@@ -187,7 +82,7 @@ function toPersonTeaser(data: PersonReading): PersonTeaser {
 
   // Element summary: from wuxing endpoint (verified)
   const rawElement = wuxing.dominant_element ?? 'Unknown';
-  const engElement = ELEMENT_MAP[rawElement] ?? rawElement;
+  const engElement = ELEMENT_DE_TO_EN[rawElement] ?? rawElement;
   const maxScore = wuxing.wu_xing_vector
     ? Math.max(...Object.values(wuxing.wu_xing_vector))
     : 0;

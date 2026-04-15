@@ -67,31 +67,28 @@ export interface FullReading {
 }
 
 export interface PersonProfile {
-  // Western astrology
+  // Western astrology (from /experience/bootstrap profile)
   sun_sign: string;
   moon_sign: string;
   ascendant: string;
-  dominant_planets: string[];
 
-  // BaZi (Four Pillars of Destiny)
+  // BaZi (from /calculate/bazi)
   four_pillars: FourPillars;
-  day_master: string;       // e.g. "Yang Wood"
+  day_master: string;
+  chinese_year_animal: string;
   element_balance: ElementBalance;
 
-  // Vedic / Nakshatra
-  nakshatra: string;        // birth star
-  nakshatra_lord: string;   // ruling planet
-
-  // Tri-system fusion narrative
-  soulprint_sectors: SoulprintSector[];
-  signature_blueprint: string; // full narrative — the core product text
+  // Fusion (from /experience/bootstrap)
+  harmony_index: number;
+  soulprint_sectors: number[];  // 12 numeric values
+  signature_seed: string;       // signature_blueprint.seed hash
 }
 
 export interface FourPillars {
-  year:  { stem: string; branch: string; animal: string };
-  month: { stem: string; branch: string };
-  day:   { stem: string; branch: string };
-  hour?: { stem: string; branch: string }; // absent when birth_time_known = false
+  year:  { stamm: string; zweig: string; tier: string; element: string };
+  month: { stamm: string; zweig: string; element: string };
+  day:   { stamm: string; zweig: string; element: string };
+  hour?: { stamm: string; zweig: string; element: string };
 }
 
 export interface ElementBalance {
@@ -100,12 +97,6 @@ export interface ElementBalance {
   earth: number;
   metal: number;
   water: number;
-}
-
-export interface SoulprintSector {
-  name:        string; // e.g. "Identity", "Relationships", "Purpose"
-  score:       number; // 0–100
-  description: string; // narrative paragraph for this sector
 }
 
 // ── Checkout ─────────────────────────────────────────────────────────────────
